@@ -1,0 +1,81 @@
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = "NovaSphere"
+      Environment = var.environment
+      Owner       = var.owner
+    }
+  }
+}
+
+data "http" "my_ip" {
+  url = "https://checkip.amazonaws.com/"
+}
+
+locals {
+  admin_cidr = "${chomp(data.http.my_ip.response_body)}/32"
+}
+
+data "aws_ami" "debian" {
+  most_recent = true
+  owners      = ["136693071363"]
+
+  filter {
+    name   = "name"
+    values = ["debian-13-amd64-*"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_key_pair" "main" {
+  key_name   = "novasphere-${var.owner}"
+  public_key = file(pathexpand("~/.ssh/novasphere.pub"))
+}
+
+module "web" {
+  source = "./modules/ec2-server"
+
+  name          = "${var.environment}-web"
+  ami_id        = data.aws_ami.debian.id
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.main.key_name
+  admin_cidr    = local.admin_cidr
+  open_ports    = [80]
+
+  tags = {
+    Environment = var.environment
+    Role        = "web"
+  }
+}
+
+module "monitoring" {
+  source = "./modules/ec2-server"
+
+  name          = "${var.environment}-monitoring"
+  ami_id        = data.aws_ami.debian.id
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.main.key_name
+  admin_cidr    = local.admin_cidr
+  open_ports    = []
+
+  tags = {
+    Environment = var.environment
+    Role        = "monitoring"
+  }
+}

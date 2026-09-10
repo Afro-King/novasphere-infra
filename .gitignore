@@ -1,0 +1,31 @@
+# Cache Terraform
+.terraform/
+terraform.tfstate.d/
+
+# States Terraform
+*.tfstate
+*.tfstate.*
+
+# Variables potentiellement sensibles
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Fichiers de remplacement locaux
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Secrets et clés
+.env
+*.pem
+*.key
+credentials
+
+# Fichiers temporaires
+crash.log
+crash.*.log
+
+# Inventaire généré
+ansible/inventory.ini
