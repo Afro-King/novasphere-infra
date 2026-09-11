@@ -44,12 +44,12 @@ data "aws_ami" "debian" {
 }
 
 resource "aws_key_pair" "main" {
-  key_name   = "novasphere-${var.owner}"
+  key_name   = "novasphere-${var.environment}-${var.owner}"
   public_key = file(pathexpand("~/.ssh/novasphere.pub"))
 }
 
 module "web" {
-  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.0.0"
+  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
 
   name          = "${var.environment}-web"
   ami_id        = data.aws_ami.debian.id
@@ -65,14 +65,15 @@ module "web" {
 }
 
 module "monitoring" {
-  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.0.0"
+  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
 
-  name          = "${var.environment}-monitoring"
-  ami_id        = data.aws_ami.debian.id
-  instance_type = var.instance_type
-  key_name      = aws_key_pair.main.key_name
-  admin_cidr    = local.admin_cidr
-  open_ports    = []
+  name                   = "${var.environment}-monitoring"
+  ami_id                 = data.aws_ami.debian.id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.main.key_name
+  admin_cidr             = local.admin_cidr
+  open_ports             = []
+  enable_monitoring_port = true
 
   tags = {
     Environment = var.environment
