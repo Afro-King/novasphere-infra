@@ -49,7 +49,7 @@ resource "aws_key_pair" "main" {
 }
 
 module "web" {
-  source = "./modules/ec2-server"
+  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.0.0"
 
   name          = "${var.environment}-web"
   ami_id        = data.aws_ami.debian.id
@@ -65,7 +65,7 @@ module "web" {
 }
 
 module "monitoring" {
-  source = "./modules/ec2-server"
+  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.0.0"
 
   name          = "${var.environment}-monitoring"
   ami_id        = data.aws_ami.debian.id
