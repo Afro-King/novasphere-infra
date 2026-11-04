@@ -11,6 +11,11 @@ terraform {
       source  = "hashicorp/http"
       version = "~> 3.0"
     }
+
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7" # ressource ephemere random_password (>= 3.7)
+    }
   }
 
   backend "s3" {

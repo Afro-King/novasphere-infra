@@ -1,0 +1,9 @@
+#!/bin/bash
+# Amorcage court : nginx + lecture du secret par le role IAM de l'instance (aucun secret ici)
+set -e
+apt-get update -y && apt-get install -y nginx python3-boto3
+install -d -m 0750 /etc/novasphere
+python3 -c "import boto3;print(boto3.client('ssm',region_name='us-east-1').get_parameter(Name='${param_name}',WithDecryption=True)['Parameter']['Value'])" > /etc/novasphere/app.conf
+chmod 0640 /etc/novasphere/app.conf
+echo "<h1>NovaSphere - ${environment}</h1><p>Serveur : $(hostname)</p><p>Secret lu depuis Parameter Store : $(test -s /etc/novasphere/app.conf && echo OK)</p>" > /var/www/html/index.html
+systemctl enable --now nginx

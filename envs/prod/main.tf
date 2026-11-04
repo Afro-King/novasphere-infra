@@ -10,12 +10,10 @@ provider "aws" {
   }
 }
 
-data "http" "my_ip" {
-  url = "https://checkip.amazonaws.com/"
-}
-
+# S07 : l'IP n'est plus decouverte dynamiquement (data "http" "my_ip") : sur la CI
+# ce serait l'IP du runner, differente a chaque run => derive permanente du SG.
 locals {
-  admin_cidr = "${chomp(data.http.my_ip.response_body)}/32"
+  admin_cidr = var.admin_cidr
 }
 
 data "aws_ami" "debian" {
@@ -45,27 +43,13 @@ data "aws_ami" "debian" {
 
 resource "aws_key_pair" "main" {
   key_name   = "novasphere-${var.environment}-${var.owner}"
-  public_key = file(pathexpand("~/.ssh/novasphere.pub"))
+  public_key = file("${path.module}/../../keys/novasphere.pub")
 }
 
-module "web" {
-  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
-
-  name          = "${var.environment}-web"
-  ami_id        = data.aws_ami.debian.id
-  instance_type = var.instance_type
-  key_name      = aws_key_pair.main.key_name
-  admin_cidr    = local.admin_cidr
-  open_ports    = [80]
-
-  tags = {
-    Environment = var.environment
-    Role        = "web"
-  }
-}
+# S04 : le serveur web unique (module "web") est remplace par ALB + ASG, voir web.tf
 
 module "monitoring" {
-  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
+  source = "git::https://github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
 
   name                   = "${var.environment}-monitoring"
   ami_id                 = data.aws_ami.debian.id
