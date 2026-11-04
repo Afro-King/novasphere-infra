@@ -1,5 +1,6 @@
 # ---------- Security Groups chaines ----------
 resource "aws_security_group" "alb" {
+  #checkov:skip=CKV_AWS_260:ALB public par conception, HTTP 80 ouvert a Internet ; pas de domaine ni certificat ACM dans le Learner Lab (voir SECURITE.md)
   name        = "novasphere-${var.environment}-alb"
   description = "ALB : HTTP depuis Internet"
   vpc_id      = module.vpc.vpc_id
@@ -13,6 +14,7 @@ resource "aws_security_group" "alb" {
   }
 
   egress { # TODO S04 : egress tout
+    description = "Vers les instances et Internet"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -34,6 +36,7 @@ resource "aws_security_group" "web" {
   }
 
   egress { # TODO S04 : egress tout (apt, et plus tard SSM)
+    description = "Sortie apt et API AWS (SSM)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -47,9 +50,15 @@ resource "aws_launch_template" "web" {
   image_id               = data.aws_ami.debian.id
   instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.web.id]
+  # Le user_data ne contient QUE le nom du parametre, jamais sa valeur
   user_data = base64encode(templatefile("${path.module}/bootstrap.sh.tftpl", {
     environment = var.environment
+    param_name  = aws_ssm_parameter.db_password.name
   }))
+
+  iam_instance_profile { # TODO S05 : attacher le profil d'instance au Launch Template
+    arn = local.instance_profile_arn
+  }
 
   metadata_options {
     http_tokens = "required" # IMDSv2 exige (critere C du projet)
@@ -67,6 +76,8 @@ resource "aws_lb" "web" {
   load_balancer_type = "application"
   subnets            = module.vpc.public_subnets
   security_groups    = [aws_security_group.alb.id]
+
+  drop_invalid_header_fields = true # checkov CKV_AWS_131 corrige
 }
 
 resource "aws_lb_target_group" "web" {
@@ -83,6 +94,7 @@ resource "aws_lb_target_group" "web" {
 }
 
 resource "aws_lb_listener" "http" {
+  #checkov:skip=CKV_AWS_2:Pas de certificat ACM sans domaine dans le Learner Lab ; HTTPS prevu sur un compte de production (voir SECURITE.md)
   load_balancer_arn = aws_lb.web.arn
   port              = 80
   protocol          = "HTTP"
@@ -95,7 +107,10 @@ resource "aws_lb_listener" "http" {
 
 # ---------- Auto Scaling Group ----------
 resource "aws_autoscaling_group" "web" {
-  name                      = "novasphere-${var.environment}-web"
+  # Blue/green : le nom porte la version du Launch Template. Nouvelle version =>
+  # nouvel ASG, cree AVANT la destruction de l'ancien (instance_refresh interdit
+  # par la SCP du Learner Lab).
+  name                      = "novasphere-${var.environment}-web-v${aws_launch_template.web.latest_version}"
   min_size                  = 2
   max_size                  = 4
   desired_capacity          = 2
@@ -103,10 +118,15 @@ resource "aws_autoscaling_group" "web" {
   target_group_arns         = [aws_lb_target_group.web.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 120
+  wait_for_elb_capacity     = 2 # Terraform attend 2 instances healthy dans l'ALB
 
   launch_template {
     id      = aws_launch_template.web.id
-    version = "$Latest"
+    version = aws_launch_template.web.latest_version
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tag { # TODO S04 : propager Name aux instances
