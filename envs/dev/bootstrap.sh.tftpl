@@ -1,0 +1,7 @@
+#!/bin/bash
+# Amorcage court (<= 10 lignes) : installer nginx et servir une page portant le nom de l'hote
+set -e
+apt-get update -y
+apt-get install -y nginx
+echo "<h1>NovaSphere - ${environment}</h1><p>Serveur : $(hostname)</p>" > /var/www/html/index.html
+systemctl enable --now nginx

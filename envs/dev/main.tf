@@ -48,21 +48,7 @@ resource "aws_key_pair" "main" {
   public_key = file(pathexpand("~/.ssh/novasphere.pub"))
 }
 
-module "web" {
-  source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
-
-  name          = "${var.environment}-web"
-  ami_id        = data.aws_ami.debian.id
-  instance_type = var.instance_type
-  key_name      = aws_key_pair.main.key_name
-  admin_cidr    = local.admin_cidr
-  open_ports    = [80]
-
-  tags = {
-    Environment = var.environment
-    Role        = "web"
-  }
-}
+# S04 : le serveur web unique (module "web") est remplace par ALB + ASG, voir web.tf
 
 module "monitoring" {
   source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"

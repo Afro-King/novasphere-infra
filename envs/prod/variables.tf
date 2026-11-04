@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environnement déployé"
   type        = string
-  default     = "dev"
+  default     = "prod"
 }
 
 variable "owner" {
@@ -19,5 +19,5 @@ variable "owner" {
 variable "instance_type" {
   description = "Type des instances EC2"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
