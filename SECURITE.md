@@ -64,3 +64,16 @@ Documentes, non corriges (commentaire `#checkov:skip` sur la ressource) :
 Ecartes en connaissance de cause (cout / perimetre du module) : logs d'acces ALB (CKV_AWS_91), WAF (CKV2_AWS_28),
 cle KMS dediee pour SSM (CKV_AWS_337, 1 $/mois), deletion protection de l'ALB (CKV_AWS_150, incompatible avec le
 destroy quotidien).
+
+## 6. Chaine CI/CD
+
+- Cible : OIDC (`envs/dev/ci.tf`, `enable_oidc = true`) : jeton GitHub signe par execution, credentials temporaires
+  1 h, role restreint a `repo:Afro-King/novasphere-infra:*`. Aucun secret stocke.
+- Learner Lab : `iam:CreateRole` interdit => OIDC impossible. Secrets `AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+  AWS_SESSION_TOKEN` = credentials **temporaires** de la session du lab (expirent en quelques heures), jamais une cle
+  permanente. Bascule vers OIDC : definir la variable GitHub `AWS_ROLE_ARN`, sans modifier les workflows.
+- Permissions du `GITHUB_TOKEN` declarees au minimum : `contents: read`, `id-token: write`, `pull-requests: write`
+  (PR uniquement).
+- Le plan poste en PR ne contient aucun secret : `value_wo` apparait comme `(write-only attribute)`.
+- `prod` est un environnement GitHub protege (relecteur requis) ; on applique le plan sauvegarde (`apply tfplan`).
+- Hygiene Git : `.gitignore` jamais affaibli ; seule la cle SSH **publique** est versionnee (`keys/novasphere.pub`).

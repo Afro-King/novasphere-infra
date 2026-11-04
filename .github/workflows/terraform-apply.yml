@@ -1,0 +1,131 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths: ["envs/**", "modules/**", ".github/workflows/**"]
+  schedule:
+    - cron: "0 3 * * *" # detection de derive, toutes les nuits a 03:00 UTC
+  workflow_dispatch:      # declenchement manuel (test de la derive)
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.17.1"
+
+jobs:
+  apply-dev:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency: terraform-dev
+    defaults:
+      run:
+        working-directory: envs/dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: AWS (OIDC)
+        if: ${{ vars.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: AWS (Learner Lab)
+        if: ${{ vars.AWS_ROLE_ARN == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -no-color -lock-timeout=120s -out=tfplan
+      # On applique LE PLAN SAUVEGARDE : exactement ce qui a ete calcule, rien d'autre
+      - run: terraform apply -input=false -no-color tfplan
+      - name: Verifier que l'ALB repond
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          for i in $(seq 1 20); do curl -sf "http://$ALB" && exit 0; sleep 15; done; exit 1
+
+  apply-prod:
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    environment: prod # environnement protege : relecteur requis avant execution
+    concurrency: terraform-prod
+    defaults:
+      run:
+        working-directory: envs/prod
+    steps:
+      - uses: actions/checkout@v4
+      - name: AWS (OIDC)
+        if: ${{ vars.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: AWS (Learner Lab)
+        if: ${{ vars.AWS_ROLE_ARN == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -no-color -lock-timeout=120s -out=tfplan
+      - run: terraform apply -input=false -no-color tfplan
+      - name: Verifier que l'ALB repond
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          for i in $(seq 1 20); do curl -sf "http://$ALB" && exit 0; sleep 15; done; exit 1
+
+  drift:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
+    concurrency: terraform-${{ matrix.env }}
+    defaults:
+      run:
+        working-directory: envs/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: AWS (OIDC)
+        if: ${{ vars.AWS_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: AWS (Learner Lab)
+        if: ${{ vars.AWS_ROLE_ARN == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      # -detailed-exitcode : 0 = rien a faire, 1 = erreur, 2 = le plan n'est pas vide (derive)
+      - name: Detecter la derive
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=120s -detailed-exitcode
+          code=$?
+          if [ "$code" -eq 2 ]; then echo "::error::Derive detectee sur ${{ matrix.env }}"; exit 1; fi
+          exit $code
