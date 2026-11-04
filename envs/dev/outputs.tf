@@ -5,5 +5,5 @@ output "alb_dns_name" {
 
 output "monitoring_public_ip" {
   description = "Adresse IP publique du serveur de supervision"
-  value       = module.monitoring.public_ip
+  value       = module.monitoring_dev.public_ip
 }

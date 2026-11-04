@@ -50,7 +50,7 @@ resource "aws_key_pair" "main" {
 
 # S04 : le serveur web unique (module "web") est remplace par ALB + ASG, voir web.tf
 
-module "monitoring" {
+module "monitoring_dev" {
   source = "git::ssh://git@github.com/Afro-King/terraform-aws-ec2-server.git?ref=v1.1.0"
 
   name                   = "${var.environment}-monitoring"
